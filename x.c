@@ -524,7 +524,7 @@ selnotify(XEvent *e)
 {
 	ulong nitems, ofs, rem;
 	int format;
-	uchar *data, *last, *repl;
+	uchar *data, *last, *repl, *readpos;
 	Atom type, incratom, property = None;
 
 	incratom = XInternAtom(xw.dpy, "INCR", 0);
@@ -589,9 +589,27 @@ selnotify(XEvent *e)
 			*repl++ = '\r';
 		}
 
+		/*
+		 * In bracketed paste mode, we mark the pasted data by adding
+		 * escape sequences around it (see below), but we also want to
+		 * prevent the pasted data from prematurely signaling an end
+		 * of paste. Therefore, strip escape characters from the
+		 * pasted data.
+		 */
+		if (IS_SET(MODE_BRCKTPASTE)) {
+			readpos = data;
+			repl = data;
+			while (readpos < last) {
+				if (*readpos != '\033')
+					*repl++ = *readpos;
+				readpos++;
+			}
+			last = repl;
+		}
+
 		if (IS_SET(MODE_BRCKTPASTE) && ofs == 0)
 			ttywrite("\033[200~", 6, 0);
-		ttywrite((char *)data, nitems * format / 8, 1);
+		ttywrite((char *)data, last - data, 1);
 		if (IS_SET(MODE_BRCKTPASTE) && rem == 0)
 			ttywrite("\033[201~", 6, 0);
 		XFree(data);
